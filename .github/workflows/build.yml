@@ -1,21 +1,18 @@
 # ci.yml file for GitHub Actions
 # https://github.com/TypeStrong/typedoc/issues/1485
-name: CI Docs
+name: CI Build step
 
-on:
-  push:
-    branches:
-      - master
+on: [push, pull_request]
 
 jobs:
-  docgen:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
         with:
           fetch-depth: 1
-
+          
       - name: Set up Node.js 18
         uses: actions/setup-node@v3
         with:
@@ -27,12 +24,3 @@ jobs:
 
       - name: Test to see if the project compiles
         run: yarn build
-
-      - name: Create the docs directory locally in CI
-        run: yarn docs
-
-      - name: Deploy 🚀
-        uses: JamesIves/github-pages-deploy-action@4.1.4
-        with:
-          branch: gh-pages
-          folder: docs
