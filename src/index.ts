@@ -541,7 +541,7 @@ export class Indexer<T extends Storage> {
   subscribe(
     address: string,
     abi: ethers.ContractInterface,
-    fromBlock = 0
+    fromBlock = this.currentIndexedBlock
   ): ethers.Contract {
     // Check if a subscription for this address already exists, and return the existing contract if it does.
     const existing = this.subscriptions.find((s) => s.address === address);
@@ -557,11 +557,9 @@ export class Indexer<T extends Storage> {
     // Create a new contract instance and add it to the subscriptions array.
     const contract = new ethers.Contract(address, abi);
 
-    fromBlock = Math.max(this.currentIndexedBlock, fromBlock);
-
     this.log(Log.Info, "Subscribed", contract.address, "from block", fromBlock);
 
-    this.subscriptions.push({
+    const index = this.subscriptions.push({
       address: address,
       contract,
       fromBlock: fromBlock,
@@ -569,7 +567,6 @@ export class Indexer<T extends Storage> {
 
     this.log(Log.Info, "Contract", contract);
 
-    // Update the indexer with the new subscription.
     this.update();
 
     return contract;
