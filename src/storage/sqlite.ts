@@ -6,6 +6,7 @@ type SubConfig = {
   address: string;
   abi: string;
   fromBlock: number;
+  chainName: string;
 };
 
 export default class SqliteStorage implements Storage {
@@ -38,6 +39,7 @@ export default class SqliteStorage implements Storage {
           address: _sub.address,
           contract: new ethers.Contract(_sub.address, JSON.parse(_sub.abi)),
           fromBlock: _sub.fromBlock,
+          chainName: _sub.chainName,
         };
       });
   }
@@ -57,7 +59,8 @@ export default class SqliteStorage implements Storage {
           sub.contract.interface.format(
             ethers.utils.FormatTypes.json
           ) as string,
-          sub.fromBlock
+          sub.fromBlock,
+          sub.chainName
         );
       }
     })();

@@ -10,6 +10,7 @@ export { default as IdbStorage } from "./storage/idb.js";
 export { default as SqliteStorage } from "./storage/sqlite.js";
 
 export { Cache };
+import { getDefaultRpcUrl } from "./defaultRpc.js";
 
 /**
  * An interface representing a raw event emitted by a contract.
@@ -54,6 +55,7 @@ export type Subscription = {
   address: string;
   contract: ethers.Contract;
   fromBlock: number;
+  chainName: string;
 };
 
 /**
@@ -338,18 +340,25 @@ export class Indexer<T extends Storage> {
           );
         }
 
-        // Group the outdated subscriptions by their fromBlock property.
         const subscriptionBatches = outdatedSubscriptions.reduce(
-          (acc: { [key: string]: Subscription[][] }, sub) => {
-            acc[sub.fromBlock] ||= [[]];
+          (
+            acc: { [key: string]: { [key: string]: Subscription[][] } },
+            sub
+          ) => {
+            acc[sub.fromBlock] ||= {};
+            acc[sub.fromBlock][sub.chainName] ||= [[]];
 
-            const last = acc[sub.fromBlock][acc[sub.fromBlock].length - 1];
+            const last =
+              acc[sub.fromBlock][sub.chainName][
+                acc[sub.fromBlock][sub.chainName].length - 1
+              ];
 
             if (last.length > this.options.getLogsContractChunkSize) {
-              acc[sub.fromBlock].push([sub]);
+              acc[sub.fromBlock][sub.chainName].push([sub]);
             } else {
               last.push(sub);
             }
+
             return acc;
           },
           {}
@@ -357,111 +366,121 @@ export class Indexer<T extends Storage> {
 
         const eventBatches = Promise.all(
           Object.entries(subscriptionBatches).flatMap(
-            ([fromBlock, subscriptionBatches]) => {
-              return subscriptionBatches.map(async (subscriptionBatch) => {
-                const addresses = subscriptionBatch.map((s) => s.address);
+            ([fromBlock, subscriptionBatches]) =>
+              Object.entries(subscriptionBatches).flatMap(
+                ([chainName, subscriptionBatches]) => {
+                  return subscriptionBatches.map(async (subscriptionBatch) => {
+                    const addresses = subscriptionBatch.map((s) => s.address);
 
-                /**
-                 * Creates an index of event contracts and their event fragments.
-                 * @param {SubscriptionBatch[]} subscriptionBatch - An array of subscription batches to index.
-                 * @returns {Record<string, { eventFragment: EventFragment; contract: ethers.Contract }>} An object containing the indexed event contracts and their event fragments.
-                 */
-                const eventContractIndex = Object.fromEntries(
-                  subscriptionBatch.flatMap(({ contract }) => {
-                    return Object.keys(contract.interface.events).map(
-                      (name) => {
-                        return [
-                          contract.interface.getEventTopic(name),
-                          {
-                            eventFragment: contract.interface.getEvent(name),
-                            contract,
-                          },
-                        ];
-                      }
+                    /**
+                     * Creates an index of event contracts and their event fragments.
+                     * @param {SubscriptionBatch[]} subscriptionBatch - An array of subscription batches to index.
+                     * @returns {Record<string, { eventFragment: EventFragment; contract: ethers.Contract }>} An object containing the indexed event contracts and their event fragments.
+                     */
+                    const eventContractIndex = Object.fromEntries(
+                      subscriptionBatch.flatMap(({ contract }) => {
+                        return Object.keys(contract.interface.events).map(
+                          (name) => {
+                            return [
+                              contract.interface.getEventTopic(name),
+                              {
+                                eventFragment:
+                                  contract.interface.getEvent(name),
+                                contract,
+                              },
+                            ];
+                          }
+                        );
+                      })
                     );
-                  })
-                );
 
-                const from = Number(fromBlock);
-                const to = this.lastBlock;
+                    const from = Number(fromBlock);
+                    const to = this.lastBlock;
 
-                const eventLogs = await this.fetchLogs(from, to, addresses);
+                    const eventLogs = await this.fetchLogs(
+                      from,
+                      to,
+                      addresses,
+                      chainName
+                    );
 
-                if (eventLogs.length > 0) {
-                  this.log(
-                    Log.Debug,
-                    "Fetched events (",
-                    eventLogs.length,
-                    ")",
-                    "Range:",
-                    from,
-                    "to",
-                    to
-                  );
-                }
-
-                /**
-                 * Parses event logs into a standardized format.
-                 * @param {RawEvent[]} eventLogs - An array of raw event logs to parse.
-                 * @param {Record<string, { eventFragment: EventFragment; contract: ethers.Contract }>} eventContractIndex - An object containing the indexed event contracts and their event fragments.
-                 * @returns {Event[]} An array of parsed events.
-                 */
-                const parsedEvents = eventLogs.flatMap((log: RawEvent) => {
-                  try {
-                    const fragmentContract = eventContractIndex[log.topics[0]];
-
-                    if (!fragmentContract) {
+                    if (eventLogs.length > 0) {
                       this.log(
-                        Log.Warning,
-                        "Unrecognized event",
-                        "Address:",
-                        log.address,
-                        "TxHash:",
-                        log.transactionHash,
-                        "Topic:",
-                        log.topics[0]
+                        Log.Debug,
+                        "Fetched events (",
+                        eventLogs.length,
+                        ")",
+                        "Range:",
+                        from,
+                        "to",
+                        to
                       );
-
-                      return [];
                     }
 
-                    const { eventFragment, contract } = fragmentContract;
+                    /**
+                     * Parses event logs into a standardized format.
+                     * @param {RawEvent[]} eventLogs - An array of raw event logs to parse.
+                     * @param {Record<string, { eventFragment: EventFragment; contract: ethers.Contract }>} eventContractIndex - An object containing the indexed event contracts and their event fragments.
+                     * @returns {Event[]} An array of parsed events.
+                     */
+                    const parsedEvents = eventLogs.flatMap((log: RawEvent) => {
+                      try {
+                        const fragmentContract =
+                          eventContractIndex[log.topics[0]];
 
-                    const args = contract.interface.decodeEventLog(
-                      eventFragment,
-                      log.data,
-                      log.topics
-                    );
+                        if (!fragmentContract) {
+                          this.log(
+                            Log.Warning,
+                            "Unrecognized event",
+                            "Address:",
+                            log.address,
+                            "TxHash:",
+                            log.transactionHash,
+                            "Topic:",
+                            log.topics[0]
+                          );
 
-                    const event: Event = {
-                      name: eventFragment.name,
-                      args: args,
-                      address: ethers.utils.getAddress(log.address),
-                      signature: eventFragment.format(),
-                      transactionHash: log.transactionHash,
-                      blockNumber: parseInt(log.blockNumber, 16),
-                      logIndex: parseInt(log.logIndex, 16),
-                    };
+                          return [];
+                        }
 
-                    return [event];
-                  } catch (e) {
-                    this.log(
-                      Log.Error,
-                      "Failed to parse event",
-                      log.address,
-                      "Tx Hash:",
-                      log.transactionHash,
-                      "Topic:",
-                      log.topics[0]
-                    );
+                        const { eventFragment, contract } = fragmentContract;
 
-                    return [];
-                  }
-                });
+                        const args = contract.interface.decodeEventLog(
+                          eventFragment,
+                          log.data,
+                          log.topics
+                        );
 
-                return parsedEvents;
-              });
-            }
+                        const event: Event = {
+                          name: eventFragment.name,
+                          args: args,
+                          address: ethers.utils.getAddress(log.address),
+                          signature: eventFragment.format(),
+                          transactionHash: log.transactionHash,
+                          blockNumber: parseInt(log.blockNumber, 16),
+                          logIndex: parseInt(log.logIndex, 16),
+                        };
+
+                        return [event];
+                      } catch (e) {
+                        this.log(
+                          Log.Error,
+                          "Failed to parse event",
+                          log.address,
+                          "Tx Hash:",
+                          log.transactionHash,
+                          "Topic:",
+                          log.topics[0]
+                        );
+
+                        return [];
+                      }
+                    });
+
+                    return parsedEvents;
+                  });
+                }
+              )
           )
         );
 
@@ -541,7 +560,8 @@ export class Indexer<T extends Storage> {
   subscribe(
     address: string,
     abi: ethers.ContractInterface,
-    fromBlock = this.currentIndexedBlock
+    chainName: string,
+    fromBlock: number
   ): ethers.Contract {
     // Check if a subscription for this address already exists, and return the existing contract if it does.
     const existing = this.subscriptions.find((s) => s.address === address);
@@ -553,16 +573,19 @@ export class Indexer<T extends Storage> {
     let provider = this.provider;
 
     this.log(Log.Info, "Subscribing", provider);
+    this.log(Log.Info, "CHAIN", chainName);
+    this.log(Log.Info, "From block", fromBlock);
 
     // Create a new contract instance and add it to the subscriptions array.
     const contract = new ethers.Contract(address, abi);
 
     this.log(Log.Info, "Subscribed", contract.address, "from block", fromBlock);
 
-    const index = this.subscriptions.push({
+    this.subscriptions.push({
       address: address,
       contract,
-      fromBlock: fromBlock,
+      fromBlock,
+      chainName,
     });
 
     this.log(Log.Info, "Contract", contract);
@@ -583,7 +606,8 @@ export class Indexer<T extends Storage> {
   private async fetchLogs(
     fromBlock: number,
     toBlock: number,
-    address: string[]
+    address: string[],
+    chainName: string
   ): Promise<RawEvent[]> {
     // Construct a cache key based on the chain ID, from block, and contract addresses.
     const cacheKey = `${
@@ -604,7 +628,8 @@ export class Indexer<T extends Storage> {
         const newEvents = await this._fetchLogs(
           cachedToBlock + 1,
           toBlock,
-          address
+          address,
+          chainName
         );
 
         const allEvents = events.concat(newEvents);
@@ -623,7 +648,12 @@ export class Indexer<T extends Storage> {
     }
 
     // If the logs are not cached, fetch them and cache them.
-    const events = await this._fetchLogs(fromBlock, toBlock, address);
+    const events = await this._fetchLogs(
+      fromBlock,
+      toBlock,
+      address,
+      chainName
+    );
 
     this.cache.set(cacheKey, JSON.stringify({ toBlock, events }));
 
@@ -644,14 +674,13 @@ export class Indexer<T extends Storage> {
     fromBlock: number,
     toBlock: number,
     address: string[],
+    chainName: string,
     depth: number = 0
   ): Promise<RawEvent[]> {
     try {
       // We don't use the Provider to get logs because it's
       // too slow for calls that return thousands of events
       // const url = this.provider.connection.url;
-
-      // const url = "https://rpc.gnosis.gateway.fm";
 
       // Construct the JSON-RPC request body for the eth_getLogs call.
       const body = {
@@ -667,9 +696,12 @@ export class Indexer<T extends Storage> {
         ],
       };
 
-      //TODO dynamic provider URL
+      const rpcUrl = getDefaultRpcUrl(chainName);
+
+      this.log(Log.Debug, "Calling RPC:", rpcUrl, "for", chainName);
+
       // Send the JSON-RPC request to the blockchain node.
-      const response = await fetch("https://rpc.gnosischain.com", {
+      const response = await fetch(rpcUrl, {
         headers: {
           "content-type": "application/json",
         },
@@ -737,7 +769,7 @@ export class Indexer<T extends Storage> {
       return (
         await Promise.all(
           chunks.map(([from, to]) => {
-            return this._fetchLogs(from, to, address, depth + 1);
+            return this._fetchLogs(from, to, address, chainName, depth + 1);
           })
         )
       ).flat();

@@ -1,8 +1,8 @@
 {
   "name": "chainsauce-web",
   "type": "module",
-  "version": "0.0.1",
-  "description": "Source EVM events for easy querying",
+  "version": "0.0.2",
+  "description": "Source EVM events clientside for easy querying",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
