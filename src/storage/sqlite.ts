@@ -22,7 +22,8 @@ export default class SqliteStorage implements Storage {
         `CREATE TABLE IF NOT EXISTS "__subscriptions" (
         "address" TEXT NOT NULL PRIMARY KEY,
         "abi" TEXT NOT NULL,
-        "fromBlock" INTEGER NOT NULL
+        "fromBlock" INTEGER NOT NULL,
+        "chainName" TEXT NOT NULL
       )`
       )
       .run();
@@ -47,7 +48,7 @@ export default class SqliteStorage implements Storage {
   async setSubscriptions(subscriptions: Subscription[]): Promise<void> {
     const truncate = this.db.prepare("DELETE FROM __subscriptions");
     const insert = this.db.prepare(
-      "INSERT INTO __subscriptions VALUES (?, ?, ?)"
+      "INSERT INTO __subscriptions VALUES (?, ?, ?, ?)"
     );
 
     this.db.transaction(() => {

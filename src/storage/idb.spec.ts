@@ -1,9 +1,9 @@
-import { expect } from "chai";
-import Database, { Database as DatabaseType } from "better-sqlite3";
-import SqliteStorage from "./sqlite";
-import { faker } from "@faker-js/faker";
 import { ethers } from "ethers";
 import { pick } from "lodash";
+import IdbStorage from "./idb";
+import { faker } from "@faker-js/faker";
+import { expect } from "chai";
+import "fake-indexeddb/auto";
 
 const mockABI = JSON.stringify([
   {
@@ -28,25 +28,12 @@ const mockABI = JSON.stringify([
   },
 ]);
 
-describe("SqliteStorage", () => {
-  let db: DatabaseType;
-  let storage: SqliteStorage;
+describe("IDBStorage", () => {
+  let storage: IdbStorage;
 
-  beforeAll(() => {
-    db = new Database(":memory:");
-    storage = new SqliteStorage(db);
-  });
-
-  beforeEach(async () => {
+  beforeAll(async () => {
+    storage = new IdbStorage(["test", "mocks"]);
     await storage.init();
-  });
-
-  afterEach(() => {
-    db.prepare("DELETE FROM __subscriptions").run();
-  });
-
-  afterAll(() => {
-    db.close();
   });
 
   it("should be able to get and set subscriptions", async () => {
