@@ -2,21 +2,6 @@ import { IDBPDatabase, openDB } from "idb";
 import type { Storage, Subscription } from "../index";
 import { ethers } from "ethers";
 
-/**
- * An interface representing an entity in the IndexedDB database.
- * @interface
- * @property {string} name - The name of the entity.
- * @property {Object} index - An optional object representing an index on the entity.
- * @property {string} index.name - The name of the index.
- * @property {string} index.keyPath - The key path of the index.
- */
-interface Entity {
-  name: string;
-  index?: {
-    name: string;
-    keyPath: string;
-  };
-}
 export default class IdbStorage implements Storage {
   /**
    * The IndexedDB database instance.
@@ -24,17 +9,13 @@ export default class IdbStorage implements Storage {
    */
   db: IDBPDatabase | null = null;
 
-  /**
-   * The array of entity objects.
-   * @type {Entity[]}
-   */
-  entities: Entity[];
+  entities: string[];
 
   /**
    * Constructs a new IdbStorage instance with the given array of entity objects.
-   * @param {Entity[]} entities - The array of entity objects.
+   * @param {string[]} entities - The array of entity objects.
    */
-  constructor(entities: Entity[]) {
+  constructor(entities: string[]) {
     this.entities = entities;
   }
 
@@ -67,18 +48,11 @@ export default class IdbStorage implements Storage {
          * Loops through each entity in the `entities` array and creates an object store for each entity in the IndexedDB database.
          * If an entity has an index, a new object store is created with the index as the key path and an index is created on the store.
          * @param {IDBPDatabase<ChainsauceDB>} db - The database instance.
-         * @param {Entity[]} entities - The array of entity objects.
+         * @param {string[]} entities - The array of entity objects.
          */
+        //TODO init with indexing
         for (const entity of this.entities) {
-          if (!entity.index) {
-            db.createObjectStore(entity.name);
-            return;
-          }
-
-          let store = db.createObjectStore(entity.name, {
-            keyPath: entity.index.keyPath,
-          });
-          store.createIndex(entity.index.name, entity.index.keyPath);
+          db.createObjectStore(entity);
         }
       },
     });
@@ -96,10 +70,16 @@ export default class IdbStorage implements Storage {
     const subs = await this.db.getAll("__subscriptions");
 
     return subs.map(
-      (sub: { address: string; abi: string; fromBlock: number }) => ({
+      (sub: {
+        address: string;
+        abi: string;
+        fromBlock: number;
+        chainName: string;
+      }) => ({
         address: sub.address,
         contract: new ethers.Contract(sub.address, JSON.parse(sub.abi)),
         fromBlock: sub.fromBlock,
+        chainName: sub.chainName,
       })
     );
   }
@@ -124,6 +104,7 @@ export default class IdbStorage implements Storage {
           ethers.utils.FormatTypes.json
         ) as string,
         fromBlock: sub.fromBlock,
+        chainName: sub.chainName,
       })
     );
 

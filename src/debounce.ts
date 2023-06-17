@@ -8,6 +8,10 @@ export default function debounce<F extends (...args: unknown[]) => unknown>(
   func: F,
   wait: number
 ) {
+  if (wait <= 0) {
+    return func;
+  }
+  
   /**
    * The timeout ID returned by `setTimeout`.
    * @type {ReturnType<typeof setTimeout> | undefined}

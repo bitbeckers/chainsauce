@@ -58,6 +58,31 @@ const indexer = await createIndexer(provider, storage, handleEvent);
 indexer.subscribe("0x1234567890", MyContractABI);
 ```
 
+## Using the Entity interface with IndexedDB
+
+The Entity interface is a common way to define domain objects in TypeScript. With IndexedDB, you can use the Entity interface to define object stores and indexes.
+
+To use the Entity interface with IndexedDB, you can define an Entity class that represents a domain object. The Entity class should have properties that correspond to the fields of the domain object, as well as an optional index property that defines an index on the object store.
+
+Here's an example of an Entity class for a User object:
+
+```js
+interface User {
+  id: number;
+  name: string;
+}
+
+const userEntity: Entity<User> = {
+  name: "users",
+  index: {
+    name: "name",
+    keyPath: "name",
+  },
+};
+```
+
+In this example, the User interface defines the id and name properties of a user object. The userEntity object defines an object store for User objects with the name "users", and an index on the "name" property.
+
 ## Complete examples
 
 - [Cookie Jar](http://github.com/bitbeckers/cookie-jar)

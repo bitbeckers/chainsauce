@@ -5,14 +5,14 @@ name: CI Build step
 on: [push, pull_request]
 
 jobs:
-  build:
+  build_and_test:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
         with:
           fetch-depth: 1
-          
+
       - name: Set up Node.js 18
         uses: actions/setup-node@v3
         with:
@@ -22,5 +22,8 @@ jobs:
       - name: Install
         run: yarn install
 
-      - name: Test to see if the project compiles
+      - name: Build to see if the project compiles
         run: yarn build
+
+      - name: Test with Jest
+        run: yarn test
