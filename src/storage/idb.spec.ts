@@ -51,12 +51,12 @@ describe("IDBStorage", () => {
     const result = await storage.getSubscriptions();
 
     // Use the `pick` function to extract only the relevant properties
-    const subsWithoutContracts = subs.map((sub) =>
-      pick(sub, ["address", "fromBlock", "chainName"])
-    );
-    const resultWithoutContracts = result.map((sub) =>
-      pick(sub, ["address", "fromBlock", "chainName"])
-    );
+    const subsWithoutContracts = subs
+      .map((sub) => pick(sub, ["address", "fromBlock", "chainName"]))
+      .sort((a, b) => a.address.localeCompare(b.address));
+    const resultWithoutContracts = result
+      .map((sub) => pick(sub, ["address", "fromBlock", "chainName"]))
+      .sort((a, b) => a.address.localeCompare(b.address));
 
     expect(resultWithoutContracts).to.deep.equal(subsWithoutContracts);
   });

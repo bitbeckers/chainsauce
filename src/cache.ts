@@ -26,7 +26,6 @@ export default class Cache {
       if (!res) {
         return undefined;
       }
-
       return JSON.parse(res) as T;
     } catch {
       return undefined;
